@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Token = require('../models/Token');
 const nodemailer = require('nodemailer');
 const { check, validationResult } = require('express-validator');
+const passport = require('passport');
 
 
 exports.signup = async(req, res) => {
@@ -79,3 +80,78 @@ exports.verifyToken = async(req, res, next) => {
         next(err)
     }
 }
+
+// Google OAuth Sign-Up
+exports.googleSignup = passport.authenticate('google', { scope: ['profile', 'email'] });
+
+exports.googleCallback = async(req, res, next) => {
+    passport.authenticate('google', async(err, user, accessToken) => {
+
+        if (err) {
+            return res.status(400).json({ error: err });
+        }
+
+        if (!user) {
+            return res.status(400).json({ message: 'Email and Google Account is Already Exists' });
+        }
+
+
+        try {
+            let tokenUpdate = await Token.findOne({ userId: user._id });
+
+            if (!tokenUpdate) {
+                tokenUpdate = new Token({ userId: user._id, token: accessToken, createdAt: new Date(), updateAt: new Date() });
+            } else {
+                tokenUpdate.token = accessToken;
+                tokenUpdate.updateAt = new Date();
+            }
+            await tokenUpdate.save();
+            return res.redirect('/dashboard');
+        } catch (error) {
+            console.error('Error saving token:', error);
+            return next(error);
+        }
+    })(req, res, next);
+};
+
+// Facebook OAuth Sign-Up
+exports.facebookSignup = passport.authenticate('facebook', { scope: ['email'] });
+
+exports.facebookCallback = (req, res, next) => {
+    passport.authenticate('facebook', async(err, user, accessToken) => {
+
+        if (err) {
+            return res.status(400).json({ error: err });
+        }
+
+        if (!user) {
+            return res.status(400).json({ message: 'Email and Facebook Account is Already Exists' });
+        }
+
+        try {
+            let tokenUpdate = await Token.findOne({ userId: user._id });
+
+            if (!tokenUpdate) {
+                tokenUpdate = new Token({ userId: user._id, token: accessToken, createdAt: new Date(), updateAt: new Date() });
+            } else {
+                tokenUpdate.token = accessToken;
+                tokenUpdate.updateAt = new Date();
+            }
+            await tokenUpdate.save();
+            return res.redirect('/dashboard');
+        } catch (error) {
+            console.error('Error saving token:', error);
+            return next(error);
+        }
+
+
+    })(req, res, next);
+};
+
+exports.logout = (req, res) => {
+
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+
+    res.redirect('/login');
+};
