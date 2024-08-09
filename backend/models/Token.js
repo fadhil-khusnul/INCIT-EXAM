@@ -1,12 +1,30 @@
-const mongoose = require('mongoose');
+const { Sequelize, DataTypes, Model } = require('sequelize');
+const sequelize = require('../config/database');
 
-const tokenSchema = new mongoose.Schema({
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    token: { type: String, required: true },
-    createdAt: { type: Date },
-    updateAt: { type: Date }
+class Token extends Model {}
+
+Token.init({
+    userId: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+            model: 'Users',
+            key: 'id'
+        }
+    },
+    token: {
+        type: DataTypes.TEXT,
+        allowNull: false
+    },
+    createdAt: {
+        type: DataTypes.DATE,
+    },
+    updateAt: {
+        type: DataTypes.DATE,
+    }
+}, {
+    sequelize,
+    modelName: 'Token'
 });
-
-const Token = mongoose.model('Token', tokenSchema);
 
 module.exports = Token;

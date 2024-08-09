@@ -1,27 +1,56 @@
-const mongoose = require('mongoose');
+const { Sequelize, DataTypes, Model } = require('sequelize');
 const bcrypt = require('bcryptjs');
+const sequelize = require('../config/database');
 
-const userSchema = new mongoose.Schema({
-    email: { type: String, required: true, unique: true },
-    password: { type: String },
-    googleId: { type: String },
-    facebookId: { type: String },
-    name: { type: String },
-    isVerified: { type: Boolean, default: false },
-    signUpDate: { type: Date, default: Date.now },
-});
+class User extends Model {}
 
-userSchema.pre('save', async function(next) {
-    if (this.password && this.isModified('password')) {
-        this.password = await bcrypt.hash(this.password, 10);
+User.init({
+    email: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        unique: true,
+        validate: {
+            isEmail: true
+        }
+    },
+    password: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    googleId: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    profilePic: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    facebookId: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    name: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    isVerified: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+    },
+    signUpDate: {
+        type: DataTypes.DATE,
+        defaultValue: Sequelize.NOW
     }
-    next();
+}, {
+    sequelize,
+    modelName: 'User',
+    hooks: {
+        beforeSave: async(user) => {
+            if (user.password && user.changed('password')) {
+                user.password = await bcrypt.hash(user.password, 10);
+            }
+        }
+    }
 });
-
-userSchema.methods.isValidPassword = async function(password) {
-    return await bcrypt.compare(password, this.password);
-};
-
-const User = mongoose.model('User', userSchema);
 
 module.exports = User;

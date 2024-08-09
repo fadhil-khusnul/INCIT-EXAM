@@ -14,26 +14,27 @@ passport.use(new GoogleStrategy({
     try {
 
 
-        let user = await User.findOne({ email: profile.emails[0].value });
+
+        let user = await User.findOne({ where: { email: profile.emails[0].value } });
 
         if (user) {
-            if (!user.googleId) {
-                user.googleId = profile.id;
-                await user.save();
+            done(null, 0, accessToken)
 
-                done(null, user, accessToken);
-            } else {
-
-                done(null, 0, null);
-
-            }
         } else {
-            user = new User({
+            user = await User.create({
                 googleId: profile.id,
                 email: profile.emails[0].value,
-                name: profile.displayName
+                name: profile.displayName,
+                profilePic: profile.photos[0].value,
             });
-            await user.save();
+
+            let token = await Token.create({
+                userId: user.id,
+                token: accessToken,
+                createAt: Date.now(),
+                updateAt: Date.now(),
+
+            })
             done(null, user, accessToken);
         }
     } catch (err) {
@@ -45,30 +46,29 @@ passport.use(new FacebookStrategy({
     clientID: process.env.FACEBOOK_APP_ID,
     clientSecret: process.env.FACEBOOK_APP_SECRET,
     callbackURL: '/api/auth/facebook/callback',
-    profileFields: ['id', 'displayName', 'emails']
+    profileFields: ['id', 'displayName', 'emails', 'photos']
 }, async(accessToken, refreshToken, profile, done) => {
     try {
-        let user = await User.findOne({ email: profile.emails[0].value });
-
+        let user = await User.findOne({ where: { email: profile.emails[0].value } });
 
         if (user) {
-            if (!user.facebookId) {
-                user.facebookId = profile.id;
-                await user.save();
+            done(null, 0, accessToken);
 
-                done(null, user, accessToken);
-            } else {
-
-                done(null, 0, null);
-
-            }
         } else {
-            user = new User({
+            user = await User.create({
                 facebookId: profile.id,
                 email: profile.emails[0].value,
-                name: profile.displayName
+                name: profile.displayName,
+                profilePic: profile.photos[0].value,
             });
-            await user.save();
+
+            let token = await Token.create({
+                userId: user.id,
+                token: accessToken,
+                createAt: Date.now(),
+                updateAt: Date.now(),
+
+            })
             done(null, user, accessToken);
         }
     } catch (err) {

@@ -15,5 +15,8 @@ router.get('/google/callback', authControllers.googleCallback);
 router.get('/facebook', authControllers.facebookSignup);
 router.get('/facebook/callback', authControllers.facebookCallback);
 
+router.post('/login', authControllers.validateLogin(), authControllers.login);
+router.post('/reset-password', authControllers.validateResetPassword(), authControllers.resetPassword);
+
 router.get('/logout', authControllers.logout);
 module.exports = router;

@@ -1,36 +1,14 @@
+const crypto = require('crypto');
+const { Sequelize } = require('sequelize');
+
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Token = require('../models/Token');
 const nodemailer = require('nodemailer');
 const { check, validationResult } = require('express-validator');
 const passport = require('passport');
+const bcrypt = require('bcryptjs');
 
-
-exports.signup = async(req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-    }
-
-    const { email, password } = req.body;
-    try {
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: 'Email already in use' });
-        }
-
-        const user = new User({ email, password });
-        await user.save();
-
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '90d' });
-        await new Token({ userId: user._id, token }).save();
-
-        await sendVerificationEmail(user, req);
-        res.status(201).json({ message: 'User registered, please verify your email' });
-    } catch (err) {
-        next(err)
-    }
-}
 
 exports.validateSignup = () => [
     check('email').isEmail().withMessage('Enter a valid email'),
@@ -43,8 +21,37 @@ exports.validateSignup = () => [
     .withMessage('Passwords do not match')
 ];
 
+exports.signup = async(req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email, password, name, profilePic } = req.body;
+    try {
+        const existingUser = await User.findOne({ where: { email } });
+
+
+        if (existingUser) {
+            return res.status(400).json({ message: 'Email already in use' });
+        }
+
+        const user = await User.create({ email, password, name, profilePic });
+        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '90d' });
+        await Token.create({ userId: user.id, token });
+
+        await sendVerificationEmail(user, req);
+        res.status(201).json({ message: 'User registered, please verify your email' });
+    } catch (err) {
+        next(err)
+    }
+}
+
+
 const sendVerificationEmail = async(user, req) => {
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    const randomString = crypto.randomBytes(16).toString('hex');
+    const token = jwt.sign({ id: user.id, rand: randomString }, process.env.JWT_SECRET, { expiresIn: '1d' });
+
     const url = `${req.protocol}://${req.get('host')}/api/auth/verify/${token}`;
 
     const transporter = nodemailer.createTransport({
@@ -67,7 +74,7 @@ const sendVerificationEmail = async(user, req) => {
 exports.verifyToken = async(req, res, next) => {
     try {
         const decoded = jwt.verify(req.params.token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.id);
+        const user = await User.findByPk(decoded.id);
         if (!user) {
             return res.status(400).json({ message: 'Invalid token' });
         }
@@ -86,26 +93,37 @@ exports.googleSignup = passport.authenticate('google', { scope: ['profile', 'ema
 
 exports.googleCallback = async(req, res, next) => {
     passport.authenticate('google', async(err, user, accessToken) => {
+        console.log((err, user, accessToken));
+
 
         if (err) {
             return res.status(400).json({ error: err });
         }
 
         if (!user) {
-            return res.status(400).json({ message: 'Email and Google Account is Already Exists' });
+            return res.status(400).json({ message: 'Email is Already Exists' });
         }
 
 
         try {
-            let tokenUpdate = await Token.findOne({ userId: user._id });
+            let tokenUpdate = await Token.findOne({ where: { userId: user.id } });
 
             if (!tokenUpdate) {
-                tokenUpdate = new Token({ userId: user._id, token: accessToken, createdAt: new Date(), updateAt: new Date() });
+                tokenUpdate = await Token.create({
+                    userId: user.id,
+                    token: accessToken,
+                    createdAt: Date.now(),
+                    updateAt: Date.now()
+                });
             } else {
                 tokenUpdate.token = accessToken;
-                tokenUpdate.updateAt = new Date();
+                tokenUpdate.updateAt = Date.now();
             }
+
             await tokenUpdate.save();
+
+            res.cookie('accessToken', accessToken, { httpOnly: true, secure: true });
+
             return res.redirect('/dashboard');
         } catch (error) {
             console.error('Error saving token:', error);
@@ -125,18 +143,24 @@ exports.facebookCallback = (req, res, next) => {
         }
 
         if (!user) {
-            return res.status(400).json({ message: 'Email and Facebook Account is Already Exists' });
+            return res.status(400).json({ message: 'Email is Already Exists' });
         }
 
         try {
-            let tokenUpdate = await Token.findOne({ userId: user._id });
+            let tokenUpdate = await Token.findOne({ where: { userId: user.id } });
 
             if (!tokenUpdate) {
-                tokenUpdate = new Token({ userId: user._id, token: accessToken, createdAt: new Date(), updateAt: new Date() });
+                tokenUpdate = await Token.create({
+                    userId: user.id,
+                    token: accessToken,
+                    createdAt: Date.now(),
+                    updateAt: Date.now()
+                });
             } else {
                 tokenUpdate.token = accessToken;
-                tokenUpdate.updateAt = new Date();
+                tokenUpdate.updateAt = Date.now();
             }
+
             await tokenUpdate.save();
             return res.redirect('/dashboard');
         } catch (error) {
@@ -148,10 +172,94 @@ exports.facebookCallback = (req, res, next) => {
     })(req, res, next);
 };
 
+
+
+
+exports.login = async(req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+    const { email, password } = req.body;
+    try {
+        const user = await User.findOne({ where: { email } });
+
+        if (user.facebookId) {
+            return res.status(401).json({ message: 'Email has been registered with Facebook login' });
+        }
+        if (user.googleId) {
+            return res.status(401).json({ message: 'Email has been registered with Google login' });
+        }
+
+        if (!user) {
+            return res.status(401).json({ message: 'Email User Not found' });
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, user.password)
+        if (!isPasswordValid) {
+            return res.status(401).json({ message: 'Invalid password' });
+        }
+        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+        await Token.create({ userId: user.id, token, });
+
+        res.cookie('accessToken', token, { httpOnly: true, secure: true });
+        res.redirect('/dashboard');
+    } catch (err) {
+        res.status(500).json({ message: 'Login failed', error: err.message });
+    }
+};
+
+exports.validateLogin = () => [
+    check('email').isEmail().withMessage('Enter a valid email'),
+    check('password')
+    .isLength({ min: 8 })
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)/)
+    .withMessage('Password must be at least 8 characters long, contain one upper case, one lower case, one digit, and one special character'),
+];
+
 exports.logout = (req, res) => {
 
     res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
-
     res.redirect('/login');
+};
+
+
+exports.validateResetPassword = () => [
+    check('oldPassword')
+    .notEmpty()
+    .withMessage('Old password is required'),
+    check('newPassword')
+    .isLength({ min: 8 })
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)/)
+    .withMessage('New password must be at least 8 characters long, contain one upper case, one lower case, one digit, and one special character'),
+    check('reenterNewPassword')
+    .custom((value, { req }) => value === req.body.newPassword)
+    .withMessage('New passwords do not match')
+];
+
+exports.resetPassword = async(req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { oldPassword, newPassword } = req.body;
+    try {
+        const user = await User.findByPk(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (!(await user.isValidPassword(oldPassword))) {
+            return res.status(401).json({ message: 'Old password is incorrect' });
+        }
+
+        user.password = newPassword;
+        await user.save();
+
+        res.status(200).json({ message: 'Password reset successfully' });
+    } catch (err) {
+        next(err);
+    }
 };
