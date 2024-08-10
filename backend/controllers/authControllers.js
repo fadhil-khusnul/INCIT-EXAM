@@ -13,15 +13,15 @@ const bcrypt = require('bcryptjs');
 exports.validateSignup = () => [
     check('email').isEmail().withMessage('Enter a valid email'),
     check('password')
-    .isLength({ min: 8 })
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)/)
-    .withMessage('Password must be at least 8 characters long, contain one upper case, one lower case, one digit, and one special character'),
+        .isLength({ min: 8 })
+        .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)/)
+        .withMessage('Password must be at least 8 characters long, contain one upper case, one lower case, one digit, and one special character'),
     check('passwordconfirm')
-    .custom((value, { req }) => value === req.body.password)
-    .withMessage('Passwords do not match')
+        .custom((value, { req }) => value === req.body.password)
+        .withMessage('Passwords do not match')
 ];
 
-exports.signup = async(req, res, next) => {
+exports.signup = async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
@@ -48,7 +48,7 @@ exports.signup = async(req, res, next) => {
 }
 
 
-const sendVerificationEmail = async(user, req) => {
+const sendVerificationEmail = async (user, req) => {
     const randomString = crypto.randomBytes(16).toString('hex');
     const token = jwt.sign({ id: user.id, rand: randomString }, process.env.JWT_SECRET, { expiresIn: '1d' });
 
@@ -71,7 +71,7 @@ const sendVerificationEmail = async(user, req) => {
     });
 };
 
-exports.verifyToken = async(req, res, next) => {
+exports.verifyToken = async (req, res, next) => {
     try {
         const decoded = jwt.verify(req.params.token, process.env.JWT_SECRET);
         const user = await User.findByPk(decoded.id);
@@ -89,61 +89,67 @@ exports.verifyToken = async(req, res, next) => {
 }
 
 // Google OAuth Sign-Up
-exports.googleSignup = passport.authenticate('google', { scope: ['profile', 'email'] });
+exports.googleSignup = passport.authenticate('google', { scope: ['email'] });
 
-exports.googleCallback = async(req, res, next) => {
-    passport.authenticate('google', async(err, user, accessToken) => {
-        console.log((err, user, accessToken));
-
-
-        if (err) {
-            return res.status(400).json({ error: err });
-        }
-
-        if (!user) {
-            return res.status(400).json({ message: 'Email is Already Exists' });
-        }
-
-
-        try {
-            let tokenUpdate = await Token.findOne({ where: { userId: user.id } });
-
-            if (!tokenUpdate) {
-                tokenUpdate = await Token.create({
-                    userId: user.id,
-                    token: accessToken,
-                    createdAt: Date.now(),
-                    updateAt: Date.now()
-                });
-            } else {
-                tokenUpdate.token = accessToken;
-                tokenUpdate.updateAt = Date.now();
+exports.googleCallback = async (req, res, next) => {
+    passport.authenticate('google', {
+        prompt: 'select_account',
+        successRedirect: `${process.env.CLIENT_URL}/dashboard`,
+        failureRedirect: "/login/failed",
+        session: false
+    },
+        async (err, user, info) => {
+            if (err) {
+                return res.status(400).json({ error: err.message });
             }
 
-            await tokenUpdate.save();
+            if (!user) {
+                return res.redirect(`${process.env.CLIENT_URL}/signup?error=${encodeURIComponent(info.message)}`);
+            }
 
-            res.cookie('accessToken', accessToken, { httpOnly: true, secure: true });
+            try {
 
-            return res.redirect('/dashboard');
-        } catch (error) {
-            console.error('Error saving token:', error);
-            return next(error);
-        }
-    })(req, res, next);
+                let tokenUpdate = await Token.findOne({ where: { userId: user.id } });
+
+                if (!tokenUpdate) {
+                    tokenUpdate = await Token.create({
+                        userId: user.id,
+                        token: accessToken,
+                        createdAt: Date.now(),
+                        updateAt: Date.now()
+                    });
+                } else {
+                    tokenUpdate.token = accessToken;
+                    tokenUpdate.updateAt = Date.now();
+                    await tokenUpdate.save();
+                }
+
+                res.cookie('accessToken', accessToken, { httpOnly: true, secure: true });
+
+                return res.redirect(process.env.CLIENT_URL);
+
+            } catch (error) {
+                console.error('Error saving token:', error);
+                return next(error);
+            }
+        })(req, res, next);
 };
+
 
 // Facebook OAuth Sign-Up
 exports.facebookSignup = passport.authenticate('facebook', { scope: ['email'] });
 
 exports.facebookCallback = (req, res, next) => {
-    passport.authenticate('facebook', async(err, user, accessToken) => {
+    passport.authenticate('facebook', async (err, user, accessToken) => {
 
         if (err) {
             return res.status(400).json({ error: err });
         }
 
         if (!user) {
-            return res.status(400).json({ message: 'Email is Already Exists' });
+            return res.redirect(`${process.env.CLIENT_URL}/signup?error=Email is already registered`);
+
+            // return res.status(400).json({ message: 'Email is Already Exists' });
         }
 
         try {
@@ -172,10 +178,21 @@ exports.facebookCallback = (req, res, next) => {
     })(req, res, next);
 };
 
+// userController.js
+exports.getUserData = (req, res) => {
+    const { user } = req;
+    res.status(200).json({
+        name: user.name,
+        email: user.email,
+        profilePic: user.profilePic, // Asumsikan profilePic ada di model User
+    });
+};
 
 
 
-exports.login = async(req, res) => {
+
+
+exports.login = async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
@@ -212,32 +229,72 @@ exports.login = async(req, res) => {
 exports.validateLogin = () => [
     check('email').isEmail().withMessage('Enter a valid email'),
     check('password')
-    .isLength({ min: 8 })
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)/)
-    .withMessage('Password must be at least 8 characters long, contain one upper case, one lower case, one digit, and one special character'),
+        .isLength({ min: 8 })
+        .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)/)
+        .withMessage('Password must be at least 8 characters long, contain one upper case, one lower case, one digit, and one special character'),
 ];
 
-exports.logout = (req, res) => {
+// exports.logout = (req, res) => {
 
-    res.clearCookie('accessToken');
-    res.redirect('/login');
+//     res.clearCookie('accessToken');
+//     res.redirect('/login');
+// };
+
+exports.logout = async (req, res) => {
+    const userEmail = req.params.email;
+    // console.log(req);
+
+
+    try {
+        const user = await User.findOne( { where: { email :userEmail}});
+
+
+        if (user) {
+            user.logoutAt = new Date();
+            await user.save();
+        }
+
+        Object.keys(req.cookies).forEach(cookie => {
+            res.clearCookie(cookie);
+        });
+
+        Object.keys(req.cookies).forEach(cookie => {
+            res.clearCookie(cookie, { httpOnly: true, sameSite: 'none' });
+        });
+
+        // Ensure accessToken cookie is cleared with the correct options
+
+
+        // res.clearCookie('accessToken');
+        return res.status(200).json({ message: 'Successfully logged out' });
+    } catch (error) {
+        return res.status(500).json({ error: 'Failed to log out' });
+    }
 };
+exports.loginFailure = (req, res) => {
+
+    res.status(401).json({
+        error: true,
+        message: "Log in failure",
+    });
+
+}
 
 
 exports.validateResetPassword = () => [
     check('oldPassword')
-    .notEmpty()
-    .withMessage('Old password is required'),
+        .notEmpty()
+        .withMessage('Old password is required'),
     check('newPassword')
-    .isLength({ min: 8 })
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)/)
-    .withMessage('New password must be at least 8 characters long, contain one upper case, one lower case, one digit, and one special character'),
+        .isLength({ min: 8 })
+        .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)/)
+        .withMessage('New password must be at least 8 characters long, contain one upper case, one lower case, one digit, and one special character'),
     check('reenterNewPassword')
-    .custom((value, { req }) => value === req.body.newPassword)
-    .withMessage('New passwords do not match')
+        .custom((value, { req }) => value === req.body.newPassword)
+        .withMessage('New passwords do not match')
 ];
 
-exports.resetPassword = async(req, res, next) => {
+exports.resetPassword = async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });

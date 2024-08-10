@@ -33,17 +33,45 @@ User.init({
         type: DataTypes.STRING,
         allowNull: true
     },
+    verificationToken: {
+        type: DataTypes.TEXT,
+        notNull: false,
+        default: null
+    },
     isVerified: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
     },
-    signUpDate: {
+    createdAt: {
         type: DataTypes.DATE,
+        notNull: true,
         defaultValue: Sequelize.NOW
-    }
+    },
+    updatedAt: {
+        type: DataTypes.DATE,
+        notNull: true,
+    },
+    loginCount: {
+        type: DataTypes.INTEGER,
+        notNull: true,
+        defaultValue: 0
+    },
+    lastLoginAt: {
+        type: DataTypes.DATE,
+        notNull: false,
+        defaultValue: null
+    },
+    logoutAt: {
+        type: DataTypes.DATE,
+        notNull: false,
+        defaultValue: null
+    },
+
 }, {
     sequelize,
     modelName: 'User',
+    timestamps: true,
+
     hooks: {
         beforeSave: async(user) => {
             if (user.password && user.changed('password')) {
