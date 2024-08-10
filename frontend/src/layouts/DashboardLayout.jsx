@@ -2,9 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Box from '@mui/material/Box';
-import ResponsiveAppBar from '../components/Menu';
+import MenuApp from '../components/MenuApp';
 
-const DashboardLayout = ({ children }) => {
+const DashboardLayout = ({ children, user }) => {  
   const [darkMode, setDarkMode] = useState(false);
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
@@ -22,7 +22,7 @@ const DashboardLayout = ({ children }) => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <ResponsiveAppBar toggleDarkMode={toggleDarkMode} />
+      <MenuApp toggleDarkMode={toggleDarkMode} user={user} />
       <Box
         sx={{
           minHeight: '100vh',

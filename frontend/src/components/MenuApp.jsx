@@ -11,29 +11,38 @@ import Avatar from '@mui/material/Avatar';
 import Button from '@mui/material/Button';
 import Tooltip from '@mui/material/Tooltip';
 import MenuItem from '@mui/material/MenuItem';
-import AdbIcon from '@mui/icons-material/Adb';
+import AssignmentInd from '@mui/icons-material/AssignmentInd';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import { useTheme } from '@mui/material/styles';
-import { FormControlLabel, ListItemIcon, Switch } from '@mui/material';
+import { ListItemIcon } from '@mui/material';
 import { MdSunny } from "react-icons/md";
 import { WiMoonAltThirdQuarter } from "react-icons/wi";
-import { AssignmentInd, LockResetOutlined, Logout, Person, PersonAddAlt1 } from '@mui/icons-material';
+import { LockResetOutlined, Logout, Person } from '@mui/icons-material';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import Cookies from 'js-cookie'; // Import js-cookie
+import { useAuth } from '../contexts/AuthContext';
+import EditProfileDialog from './EditProfileDialog.jsx';
 
 const pages = ['Dashboard'];
+
 const settings = [
-  { label: 'Profile', icon: <Person /> },
-  { label: 'Logout', icon: <Logout /> },
-  { label: 'Reset Password', icon: <LockResetOutlined /> },
+  { label: 'Profile', icon: <Person />, link: '/edit-profile' },
+  { label: 'Reset Password', icon: <LockResetOutlined />, link: '/reset-password' },
+  { label: 'Logout', icon: <Logout />, link: '/logout' },
 ];
-const ResponsiveAppBar = ({ toggleDarkMode }) => {
+
+const MenuApp = ({ toggleDarkMode, user, isAuthenticated }) => {
   const theme = useTheme();
+  const navigate = useNavigate();
 
-  const isDarkMode = theme.palette.mode === 'dark';
-
+  const {logout} = useAuth()
 
   const [anchorElNav, setAnchorElNav] = React.useState(null);
   const [anchorElUser, setAnchorElUser] = React.useState(null);
+  const [openEditDialog, setOpenEditDialog] = React.useState(false);
+
 
   const handleOpenNavMenu = (event) => {
     setAnchorElNav(event.currentTarget);
@@ -50,7 +59,44 @@ const ResponsiveAppBar = ({ toggleDarkMode }) => {
     setAnchorElUser(null);
   };
 
+  const handleNavigate = (link) => {
+    navigate(link);
+    handleCloseUserMenu(); // Close menu after navigating
+  };
+
+  const handleLogout = async () => {
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/auth/logout/${user?.email}`);
+      if (response.status === 200) {
+        await logout()
+
+
+
+      }
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
+ 
+
+  const handleMenuItemClick = (setting) => {
+    if (setting.label === 'Logout') {
+      handleLogout();
+    } else if (setting.label === 'Profile') {
+      setOpenEditDialog(true);
+    } else {
+      handleNavigate(setting.link);
+    }
+  }
+
+  const handleEditSave = (updatedUser) => {
+    // Save the updated user information here, such as sending to an API
+    console.log('Updated User:', updatedUser);
+  };
+
   return (
+    <>
     <AppBar position="static">
       <Container maxWidth="xl">
         <Toolbar disableGutters>
@@ -59,7 +105,7 @@ const ResponsiveAppBar = ({ toggleDarkMode }) => {
             variant="h6"
             noWrap
             component="a"
-            href="#app-bar-with-responsive-menu"
+            href="/"
             sx={{
               mr: 2,
               display: { xs: 'none', md: 'flex' },
@@ -114,7 +160,7 @@ const ResponsiveAppBar = ({ toggleDarkMode }) => {
             variant="h5"
             noWrap
             component="a"
-            href="#app-bar-with-responsive-menu"
+            href="/"
             sx={{
               mr: 2,
               display: { xs: 'flex', md: 'none' },
@@ -126,7 +172,7 @@ const ResponsiveAppBar = ({ toggleDarkMode }) => {
               textDecoration: 'none',
             }}
           >
-            LOGO
+            INCIT EXAM
           </Typography>
           <Box sx={{ flexGrow: 1, display: { xs: 'none', md: 'flex' } }}>
             {pages.map((page) => (
@@ -140,31 +186,16 @@ const ResponsiveAppBar = ({ toggleDarkMode }) => {
             ))}
           </Box>
 
-
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <IconButton sx={{ ml: 1, mr: 1 }} onClick={toggleDarkMode} color="inherit">
               {theme.palette.mode === 'dark' ? <WiMoonAltThirdQuarter /> : <MdSunny />}
             </IconButton>
-            {/* <FormControlLabel
-              control={
-                <Switch
-                  checked={isDarkMode}
-                  onChange={toggleDarkMode}
-                  icon={<MdSunny size={20} />}
-                  checkedIcon={<WiMoonAltThirdQuarter size={20} />}
-                />
-              }
-              labelPlacement="start"
-              sx={{ mr: 1 }}  // Add margin-right to create space
-            /> */}
             <Box sx={{ flexGrow: 0 }}>
               <Tooltip title="Open settings">
                 <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
-                  <Avatar alt="Remy Sharp" src="/static/images/avatar/2.jpg" />
+                  <Avatar alt="Remy Sharp" src={user?.profilePic} />
                 </IconButton>
-
               </Tooltip>
-
               <Menu
                 sx={{ mt: '45px' }}
                 id="menu-appbar"
@@ -183,15 +214,14 @@ const ResponsiveAppBar = ({ toggleDarkMode }) => {
               >
                 <Box sx={{ px: 2, py: 1 }}>
                   <Typography variant="body2" color="text.secondary">
-                    {"Email.wwwwwwwwwwwwcom"}
+                    {user?.email || 'Loading...'}
                   </Typography>
                 </Box>
 
-                {/* Divider for visual separation (optional) */}
                 <MenuItem divider />
 
                 {settings.map((setting) => (
-                  <MenuItem key={setting.label} onClick={handleCloseUserMenu}>
+                  <MenuItem key={setting.label} onClick={() => handleMenuItemClick(setting)}>
                     <ListItemIcon>{setting.icon}</ListItemIcon>
                     <Typography textAlign="center">{setting.label}</Typography>
                   </MenuItem>
@@ -202,7 +232,15 @@ const ResponsiveAppBar = ({ toggleDarkMode }) => {
         </Toolbar>
       </Container>
     </AppBar>
+
+    <EditProfileDialog
+        open={openEditDialog}
+        onClose={() => setOpenEditDialog(false)}
+        user={user}
+        onSave={handleEditSave}
+      />
+    </>
   );
 };
 
-export default ResponsiveAppBar;
+export default MenuApp;

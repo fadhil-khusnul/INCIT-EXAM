@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Box, Button, TextField, Typography, Avatar, Stack, IconButton, FormHelperText, FormControl, InputLabel, OutlinedInput, InputAdornment, Link } from '@mui/material';
+import { Box, Button, TextField, Typography, Avatar, Stack, IconButton, FormHelperText, FormControl, InputLabel, OutlinedInput, InputAdornment, Link, CircularProgress, Snackbar, Alert } from '@mui/material';
 import { Google as GoogleIcon, Facebook as FacebookIcon, VisibilityOff, Visibility } from '@mui/icons-material';
+import { useSigin, useOauth } from '../hooks/auth';
 
 const Login = () => {
   const [name, setName] = useState('');
@@ -9,21 +10,25 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState({});
+  const [isLoading, setLoading] = useState(false);
+
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
 
 
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
 
+  const mutation = useSigin();
+  const mutationOauth = useOauth();
   const handleClickShowPassword = () => setShowPassword((show) => !show);
 
   const handleMouseDownPassword = (event) => {
     event.preventDefault();
   };
-  const handleClickShowPasswordConfirm = () => setShowPasswordConfirm((show) => !show);
 
-  const handleMouseDownPasswordConfirm = (event) => {
-    event.preventDefault();
-  };
+
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -62,9 +67,45 @@ const Login = () => {
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
-      // Proceed with form submission or API call
-      console.log('Form submitted successfully');
+      setLoading(true); // Set loading state to true
+      mutation.mutate({ name, email, password, passwordconfirm: confirmPassword }, {
+        onSuccess: (data) => {
+          setSnackbarMessage(data.message);
+          setSnackbarSeverity('success');
+          setSnackbarOpen(true);
+          setLoading(false); // Reset loading state
+        },
+        onError: (error) => {
+          setSnackbarMessage(error.response?.data?.message || error.message);
+          setSnackbarSeverity('error');
+          setSnackbarOpen(true);
+          setLoading(false); // Reset loading state
+        },
+      });
     }
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbarOpen(false);
+  };
+
+  const handleOAuthSignUp = async (provider) => {
+    setSnackbarMessage(`Oauth to ${provider}...`);
+    setSnackbarSeverity('info');
+    setSnackbarOpen(true);
+
+    try {
+      mutationOauth.mutate(provider, {
+      });
+
+
+    } catch (error) {
+      setSnackbarMessage(error.response?.data?.message || error.message);
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    }
+
+
   };
 
   return (
@@ -141,20 +182,51 @@ const Login = () => {
 
 
 
-        <Button type='submit' onClick={handleSubmit} variant="contained" color="primary" fullWidth sx={{ mb: 2 }}>
-          Sign In
+        <Button
+          type="submit"
+          onClick={handleSubmit}
+          variant="contained"
+          color="primary"
+          fullWidth
+          sx={{ mb: 2 }}
+          disabled={isLoading}
+          startIcon={isLoading ? <CircularProgress size={24} /> : null}
+        >
+          {isLoading ? 'Signing In...' : 'Sign In'}
         </Button>
 
-        <Button variant="outlined" fullWidth startIcon={<GoogleIcon />} sx={{ mb: 2 }}>
-          Sign In with Google
+        <Button
+          variant="outlined"
+          fullWidth
+          startIcon={<GoogleIcon />}
+          sx={{ mb: 2 }}
+          onClick={() => handleOAuthSignUp('google')}
+        >
+          Sign Up with Google
         </Button>
 
-        <Button variant="outlined" fullWidth startIcon={<FacebookIcon />}>
-          Sign In with Facebook
+        <Button
+          variant="outlined"
+          fullWidth
+          startIcon={<FacebookIcon />}
+          onClick={() => handleOAuthSignUp('facebook')}
+        >
+          Sign Up with Facebook
         </Button>
+
         <Typography textAlign={'center'} mt={3}>
           Don't have an account? <Link href="/signup">Sign up</Link>
         </Typography>
+
+        <Snackbar
+          open={snackbarOpen}
+          autoHideDuration={6000}
+          onClose={handleSnackbarClose}
+        >
+          <Alert onClose={handleSnackbarClose} severity={snackbarSeverity} sx={{ width: '100%' }}>
+            {snackbarMessage}
+          </Alert>
+        </Snackbar>
       </Box>
     </Box>
   );

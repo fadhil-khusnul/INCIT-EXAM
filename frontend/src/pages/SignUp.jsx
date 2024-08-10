@@ -1,26 +1,33 @@
-import React, { useState } from 'react';
-import { Box, Button, TextField, Typography, Avatar, Stack, IconButton, FormHelperText, FormControl, InputLabel, OutlinedInput, InputAdornment, Link } from '@mui/material';
+import React, { useEffect, useState } from 'react';
+import {
+  Box, Button, TextField, Typography, Avatar, Stack, IconButton,
+  FormHelperText, FormControl, InputLabel, OutlinedInput, InputAdornment, Link,
+  CircularProgress, Snackbar, Alert
+} from '@mui/material';
 import { Google as GoogleIcon, Facebook as FacebookIcon, VisibilityOff, Visibility } from '@mui/icons-material';
-
+import { useSignUp, useOauth } from '../hooks/auth';
+import axios from 'axios';
 const SignUp = () => {
   const [name, setName] = useState('');
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState({});
-
-
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
+  const [isLoading, setLoading] = useState(false); // New state for loading
+
+  const mutation = useSignUp();
+  const mutationOauth = useOauth();
 
   const handleClickShowPassword = () => setShowPassword((show) => !show);
-
+  const handleClickShowPasswordConfirm = () => setShowPasswordConfirm((show) => !show);
   const handleMouseDownPassword = (event) => {
     event.preventDefault();
   };
-  const handleClickShowPasswordConfirm = () => setShowPasswordConfirm((show) => !show);
-
   const handleMouseDownPasswordConfirm = (event) => {
     event.preventDefault();
   };
@@ -31,8 +38,6 @@ const SignUp = () => {
   };
 
   const validatePassword = (password) => {
-    console.log(password);
-    
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     return passwordRegex.test(password);
   };
@@ -50,7 +55,6 @@ const SignUp = () => {
       newErrors.email = 'Invalid email format';
     }
 
-
     if (!validatePassword(password)) {
       newErrors.password = 'Password must contain at least 8 characters, including one lowercase, one uppercase, one digit, and one special character';
     }
@@ -62,9 +66,68 @@ const SignUp = () => {
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
-      // Proceed with form submission or API call
-      console.log('Form submitted successfully');
+      setLoading(true); // Set loading state to true
+      mutation.mutate({ name, email, password, passwordconfirm: confirmPassword }, {
+        onSuccess: (data) => {
+          setSnackbarMessage(data.message);
+          setSnackbarSeverity('success');
+          setSnackbarOpen(true);
+          setLoading(false); // Reset loading state
+        },
+        onError: (error) => {
+          setSnackbarMessage(error.response?.data?.message || error.message);
+          setSnackbarSeverity('error');
+          setSnackbarOpen(true);
+          setLoading(false); // Reset loading state
+        },
+      });
     }
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbarOpen(false);
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search); // Parse the query string
+    const error = params.get('error'); // Get the error parameter from the URL
+    if (error) {
+      setSnackbarMessage(error);
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    }
+  }, [location.search]);
+
+  const handleOAuthSignUp = async (provider) => {
+    setSnackbarMessage(`Redirecting to ${provider}...`);
+    setSnackbarSeverity('info');
+    setSnackbarOpen(true);
+
+
+    try {
+      mutationOauth.mutate(provider, {
+        // onSuccess: (data) => {
+        //   setSnackbarMessage(data.message);
+        //   setSnackbarSeverity('success');
+        //   setSnackbarOpen(true);
+        //   setLoading(false); 
+        // },
+        // onError: (error) => {
+        //   setSnackbarMessage(error.response?.data?.message || error.message);
+        //   setSnackbarSeverity('error');
+        //   setSnackbarOpen(true);
+        //   setLoading(false); 
+        // },
+      });
+
+
+    } catch (error) {
+      setSnackbarMessage(error.response?.data?.message || error.message);
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    }
+
+
   };
 
   return (
@@ -96,8 +159,7 @@ const SignUp = () => {
         </Stack>
 
         <FormControl fullWidth required error={!!errors.name} sx={{ mb: 2 }}>
-        <InputLabel>Name</InputLabel>
-
+          <InputLabel>Name</InputLabel>
           <OutlinedInput
             label="Name"
             value={name}
@@ -105,15 +167,12 @@ const SignUp = () => {
             fullWidth
             sx={{ mb: 2 }}
             error={!!errors.name}
-
           />
           <FormHelperText>{errors.name}</FormHelperText>
         </FormControl>
 
-
         <FormControl fullWidth required error={!!errors.email} sx={{ mb: 2 }}>
-        <InputLabel>Email</InputLabel>
-
+          <InputLabel>Email</InputLabel>
           <OutlinedInput
             label="Email"
             value={email}
@@ -123,7 +182,7 @@ const SignUp = () => {
           <FormHelperText>{errors.email}</FormHelperText>
         </FormControl>
 
-        <FormControl fullWidth required error={!!errors.password} sx={{ mb: 2 }}  variant="outlined">
+        <FormControl fullWidth required error={!!errors.password} sx={{ mb: 2 }} variant="outlined">
           <InputLabel htmlFor="outlined-adornment-password">Password</InputLabel>
           <OutlinedInput
             id="outlined-adornment-password"
@@ -141,17 +200,14 @@ const SignUp = () => {
               </InputAdornment>
             }
             label="Password"
-
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             error={!!errors.password}
-
-
           />
           <FormHelperText>{errors.password}</FormHelperText>
-
         </FormControl>
-        <FormControl fullWidth required error={!!errors.confirmPassword} sx={{ mb: 3 }}  variant="outlined">
+
+        <FormControl fullWidth required error={!!errors.confirmPassword} sx={{ mb: 3 }} variant="outlined">
           <InputLabel>Confirm Password</InputLabel>
           <OutlinedInput
             type={showPasswordConfirm ? 'text' : 'password'}
@@ -167,37 +223,61 @@ const SignUp = () => {
               </InputAdornment>
             }
             label="Confirm Password"
-
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             error={!!errors.confirmPassword}
-
-
           />
           <FormHelperText>{errors.confirmPassword}</FormHelperText>
-
         </FormControl>
-  
 
-        <Button type='submit' onClick={handleSubmit} variant="contained" color="primary" fullWidth sx={{ mb: 2 }}>
-          Sign Up
+        <Button
+          type="submit"
+          onClick={handleSubmit}
+          variant="contained"
+          color="primary"
+          fullWidth
+          sx={{ mb: 2 }}
+          disabled={isLoading}
+          startIcon={isLoading ? <CircularProgress size={24} /> : null}
+        >
+          {isLoading ? 'Signing Up...' : 'Sign Up'}
         </Button>
 
-        <Button variant="outlined" fullWidth startIcon={<GoogleIcon />} sx={{ mb: 2 }}>
+        <Button
+          variant="outlined"
+          fullWidth
+          startIcon={<GoogleIcon />}
+          sx={{ mb: 2 }}
+          onClick={() => handleOAuthSignUp('google')}
+        >
           Sign Up with Google
         </Button>
 
-        <Button variant="outlined" fullWidth startIcon={<FacebookIcon />}>
+        <Button
+          variant="outlined"
+          fullWidth
+          startIcon={<FacebookIcon />}
+          onClick={() => handleOAuthSignUp('facebook')}
+        >
           Sign Up with Facebook
         </Button>
-        <Typography textAlign={'center'} mt={3}>
-          
 
-        Already have an account? <Link href="/login">Sign In</Link>
+        <Typography textAlign={'center'} mt={3}>
+          Already have an account? <Link href="/login">Sign In</Link>
         </Typography>
+
+        <Snackbar
+          open={snackbarOpen}
+          autoHideDuration={6000}
+          onClose={handleSnackbarClose}
+        >
+          <Alert onClose={handleSnackbarClose} severity={snackbarSeverity} sx={{ width: '100%' }}>
+            {snackbarMessage}
+          </Alert>
+        </Snackbar>
       </Box>
     </Box>
   );
-}
+};
 
 export default SignUp;
