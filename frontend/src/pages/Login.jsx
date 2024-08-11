@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Button, TextField, Typography, Avatar, Stack, IconButton, FormHelperText, FormControl, InputLabel, OutlinedInput, InputAdornment, Link, CircularProgress, Snackbar, Alert } from '@mui/material';
 import { Google as GoogleIcon, Facebook as FacebookIcon, VisibilityOff, Visibility } from '@mui/icons-material';
 import { useSigin, useOauth } from '../hooks/auth';
+import { useAuth } from '../contexts/AuthContext';
 
 const Login = () => {
   const [name, setName] = useState('');
@@ -18,9 +19,10 @@ const Login = () => {
 
 
   const [showPassword, setShowPassword] = useState(false);
-  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
 
   const mutation = useSigin();
+
+  const { login } = useAuth()
   const mutationOauth = useOauth();
   const handleClickShowPassword = () => setShowPassword((show) => !show);
 
@@ -36,20 +38,15 @@ const Login = () => {
   };
 
   const validatePassword = (password) => {
-    console.log(password);
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     return passwordRegex.test(password);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     const newErrors = {};
-
-    if (!name.trim()) {
-      newErrors.name = 'Name is required';
-    }
 
     if (!validateEmail(email)) {
       newErrors.email = 'Invalid email format';
@@ -60,28 +57,48 @@ const Login = () => {
       newErrors.password = 'Password must contain at least 8 characters, including one lowercase, one uppercase, one digit, and one special character';
     }
 
-    if (password !== confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
+
 
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
-      setLoading(true); // Set loading state to true
-      mutation.mutate({ name, email, password, passwordconfirm: confirmPassword }, {
-        onSuccess: (data) => {
-          setSnackbarMessage(data.message);
-          setSnackbarSeverity('success');
-          setSnackbarOpen(true);
-          setLoading(false); // Reset loading state
-        },
-        onError: (error) => {
-          setSnackbarMessage(error.response?.data?.message || error.message);
-          setSnackbarSeverity('error');
-          setSnackbarOpen(true);
-          setLoading(false); // Reset loading state
-        },
-      });
+      setLoading(true);
+
+
+
+      try {
+        const response = await login(email, password);
+        console.log(response); // Now you should see the response data
+        // Proceed with any further actions, e.g., updating the auth context or redirecting the user
+      } catch (error) {
+        console.error('Error during login:', error.response?.data || error.message);
+        // Handle the error, e.g., by showing a notification to the user
+      } finally {
+        setLoading(false); // Reset loading state regardless of success or failure
+      }
+
+
+
+
+
+
+
+
+      // Set loading state to true
+      // mutation.mutate({ email, password }, {
+      //   onSuccess: (data) => {
+      //     setSnackbarMessage(data.message);
+      //     setSnackbarSeverity('success');
+      //     setSnackbarOpen(true);
+      //     setLoading(false); // Reset loading state
+      //   },
+      //   onError: (error) => {
+      //     setSnackbarMessage(error.response?.data?.message || error.message);
+      //     setSnackbarSeverity('error');
+      //     setSnackbarOpen(true);
+      //     setLoading(false); // Reset loading state
+      //   },
+      // });
     }
   };
 

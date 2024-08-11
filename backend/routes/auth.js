@@ -18,11 +18,12 @@ router.get('/facebook', authControllers.facebookSignup);
 router.get('/facebook/callback', authControllers.facebookCallback);
 
 router.post('/login', authControllers.validateLogin(), authControllers.login);
-router.post('/reset-password', authControllers.validateResetPassword(), authControllers.resetPassword);
+router.post('/reset-password', authMiddleware,  authControllers.validateResetPassword(), authControllers.resetPassword);
 
-router.get('/logout/:email', authControllers.logout);
+router.get('/logout', authMiddleware, authControllers.logout);
 router.get('/login/failed', authControllers.loginFailure);
 router.get('/user-profile', authMiddleware, authControllers.getUserData);
+router.post('/edit-profile', authMiddleware, authControllers.editProfile);
 
 
 module.exports = router;

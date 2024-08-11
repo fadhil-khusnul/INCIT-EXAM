@@ -75,104 +75,93 @@ exports.verifyToken = async (req, res, next) => {
     try {
         const decoded = jwt.verify(req.params.token, process.env.JWT_SECRET);
         const user = await User.findByPk(decoded.id);
+
+        console.log(user);
+        
         if (!user) {
             return res.status(400).json({ message: 'Invalid token' });
         }
 
         user.isVerified = true;
+        user.loginCount += 1;
+        user.lastLoginAt = Date.now();
+
+
         await user.save();
 
-        res.redirect('/dashboard');
+        const payload = {
+            id: user.id,
+            name: user.name,
+        };
+    
+        const secret = process.env.JWT_SECRET;
+        // const expiresIn = 60 * 60 * 1;
+        const token = jwt.sign(payload, secret);
+    
+    
+        res.cookie('accessToken', token);
+    
+
+        return res.redirect(`${process.env.CLIENT_URL}/dashboard`);
     } catch (err) {
         next(err)
     }
 }
 
 // Google OAuth Sign-Up
-exports.googleSignup = passport.authenticate('google', { scope: ['email'] });
-
-exports.googleCallback = async (req, res, next) => {
-    passport.authenticate('google', {
-        prompt: 'select_account',
-        successRedirect: `${process.env.CLIENT_URL}/dashboard`,
-        failureRedirect: "/login/failed",
-        session: false
-    },
-        async (err, user, info) => {
-            if (err) {
-                return res.status(400).json({ error: err.message });
-            }
-
-            if (!user) {
-                return res.redirect(`${process.env.CLIENT_URL}/signup?error=${encodeURIComponent(info.message)}`);
-            }
-
-            try {
-
-                let tokenUpdate = await Token.findOne({ where: { userId: user.id } });
-
-                if (!tokenUpdate) {
-                    tokenUpdate = await Token.create({
-                        userId: user.id,
-                        token: accessToken,
-                        createdAt: Date.now(),
-                        updateAt: Date.now()
-                    });
-                } else {
-                    tokenUpdate.token = accessToken;
-                    tokenUpdate.updateAt = Date.now();
-                    await tokenUpdate.save();
-                }
-
-                res.cookie('accessToken', accessToken, { httpOnly: true, secure: true });
-
-                return res.redirect(process.env.CLIENT_URL);
-
-            } catch (error) {
-                console.error('Error saving token:', error);
-                return next(error);
-            }
-        })(req, res, next);
-};
-
 
 // Facebook OAuth Sign-Up
 exports.facebookSignup = passport.authenticate('facebook', { scope: ['email'] });
 
 exports.facebookCallback = (req, res, next) => {
-    passport.authenticate('facebook', async (err, user, accessToken) => {
+    passport.authenticate('facebook', async (err, token) => {
 
-        if (err) {
-            return res.status(400).json({ error: err });
-        }
+        // const token = req.user.token;
+        res.cookie('accessToken', token);
+        return res.redirect(`${process.env.CLIENT_URL}/dashboard`);
+        // if (err) {
+        //     return res.status(400).json({ error: err });
+        // }
 
-        if (!user) {
-            return res.redirect(`${process.env.CLIENT_URL}/signup?error=Email is already registered`);
+        // if (!user) {
+        //     return res.redirect(`${process.env.CLIENT_URL}/signup?error=Email is already registered`);
 
-            // return res.status(400).json({ message: 'Email is Already Exists' });
-        }
+        //     // return res.status(400).json({ message: 'Email is Already Exists' });
+        // }
 
-        try {
-            let tokenUpdate = await Token.findOne({ where: { userId: user.id } });
+        // try {
+        //     let tokenUpdate = await Token.findOne({ where: { userId: user.id } });
 
-            if (!tokenUpdate) {
-                tokenUpdate = await Token.create({
-                    userId: user.id,
-                    token: accessToken,
-                    createdAt: Date.now(),
-                    updateAt: Date.now()
-                });
-            } else {
-                tokenUpdate.token = accessToken;
-                tokenUpdate.updateAt = Date.now();
-            }
+        //     if (!tokenUpdate) {
+        //         tokenUpdate = await Token.create({
+        //             userId: user.id,
+        //             token: accessToken,
+        //             createdAt: Date.now(),
+        //             updateAt: Date.now()
+        //         });
+        //     } else {
+        //         tokenUpdate.token = accessToken;
+        //         tokenUpdate.updateAt = Date.now();
+        //     }
 
-            await tokenUpdate.save();
-            return res.redirect('/dashboard');
-        } catch (error) {
-            console.error('Error saving token:', error);
-            return next(error);
-        }
+        //     await tokenUpdate.save();
+
+        //     const payload = {
+        //         id: user.id,
+        //         name: user.name,
+        //     };
+        //     const secret = process.env.JWT_SECRET;
+
+        //     const token = jwt.sign(payload, secret);
+        //     res.cookie('accessToken', token);
+
+
+        //     return res.redirect(`${process.env.CLIENT_URL}/dashboard`);
+
+        // } catch (error) {
+        //     console.error('Error saving token:', error);
+        //     return next(error);
+        // }
 
 
     })(req, res, next);
@@ -186,6 +175,32 @@ exports.getUserData = (req, res) => {
         email: user.email,
         profilePic: user.profilePic, // Asumsikan profilePic ada di model User
     });
+};
+
+exports.editProfile = async(req, res) => {
+    try {
+        const { user } = req;
+
+        const email = user.email;
+
+        const { name } = req.body;
+        const userUpdate = await User.findOne({ where: { email: email } });
+
+        if (!userUpdate) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+       
+
+        user.name = name;
+        await user.save();
+
+        res.status(200).json({ message: 'Profile Name Updated' });
+    } catch (err) {
+        res.status(500).json({
+            err: err
+        })
+    }
 };
 
 
@@ -216,11 +231,33 @@ exports.login = async (req, res) => {
         if (!isPasswordValid) {
             return res.status(401).json({ message: 'Invalid password' });
         }
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1d' });
-        await Token.create({ userId: user.id, token, });
 
-        res.cookie('accessToken', token, { httpOnly: true, secure: true });
-        res.redirect('/dashboard');
+        user.loginCount += 1;
+        user.lastLoginAt = Date.now();
+        await user.save();
+
+
+        const payload = {
+            id: user.id,
+            name: user.name,
+        };
+
+    
+        const secret = process.env.JWT_SECRET;
+        
+        const token = jwt.sign(payload, secret);
+        await Token.create({ userId: user.id, token });
+
+       
+
+        res.cookie('accessToken', token);
+
+        return res.json({ redirectUrl: `${process.env.CLIENT_URL}/dashboard` });
+
+        
+
+
+        // return res.redirect(`${process.env.CLIENT_URL}/dashboard`);
     } catch (err) {
         res.status(500).json({ message: 'Login failed', error: err.message });
     }
@@ -241,8 +278,10 @@ exports.validateLogin = () => [
 // };
 
 exports.logout = async (req, res) => {
-    const userEmail = req.params.email;
-    // console.log(req);
+    const userEmail = req.user.email;
+
+    // const user = await User.findByPk(req.user.id);
+
 
 
     try {
@@ -289,10 +328,12 @@ exports.validateResetPassword = () => [
         .isLength({ min: 8 })
         .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*\W)/)
         .withMessage('New password must be at least 8 characters long, contain one upper case, one lower case, one digit, and one special character'),
-    check('reenterNewPassword')
+    check('matchNewPassword')
         .custom((value, { req }) => value === req.body.newPassword)
         .withMessage('New passwords do not match')
 ];
+
+
 
 exports.resetPassword = async (req, res, next) => {
     const errors = validationResult(req);
@@ -300,8 +341,15 @@ exports.resetPassword = async (req, res, next) => {
         return res.status(400).json({ errors: errors.array() });
     }
 
-    const { oldPassword, newPassword } = req.body;
+    console.log(req.body); // This will log the received body: { oldPassword, newPassword, matchNewPassword }
+
+    const { oldPassword, newPassword, matchNewPassword } = req.body;
+
     try {
+        if (newPassword !== matchNewPassword) {
+            return res.status(400).json({ message: 'Passwords do not match' });
+        }
+
         const user = await User.findByPk(req.user.id);
 
         if (!user) {
@@ -315,7 +363,7 @@ exports.resetPassword = async (req, res, next) => {
         user.password = newPassword;
         await user.save();
 
-        res.status(200).json({ message: 'Password reset successfully' });
+        return res.status(200).json({ message: 'Password reset successfully' });
     } catch (err) {
         next(err);
     }

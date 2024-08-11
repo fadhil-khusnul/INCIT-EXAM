@@ -50,6 +50,30 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
   };
 
+  const login = async (email, password) => {
+    const userData = { email, password };
+    
+    try {
+        const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/auth/login`, userData, {
+            withCredentials: true, // If your backend uses cookies for auth
+        });
+
+        console.log(response);
+
+        // Redirect the user to the dashboard
+        if (response.data.redirectUrl) {
+            window.location.href = response.data.redirectUrl;
+        }
+
+        return response.data; // Return the response data
+    } catch (error) {
+        console.error('Login Error:', error.response?.data || error.message);
+        throw error; // Throw the error so that it can be caught in handleSubmit
+    }
+};
+
+
+
 
 
 
@@ -57,7 +81,7 @@ export const AuthProvider = ({ children }) => {
 
 
   return (
-    <AuthContext.Provider value={{ token, isAuthenticated, logout, user }}>
+    <AuthContext.Provider value={{ token, isAuthenticated, logout, user, login }}>
       {children}
     </AuthContext.Provider>
   );

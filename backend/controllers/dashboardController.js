@@ -8,7 +8,7 @@ exports.getDashboardStats = async(req, res) => {
 
         const activeSessionsToday = await User.count({
             where: {
-                updatedAt: {
+              lastLoginAt: {
                     [Op.gte]: moment().startOf('day').toDate(),
                 }
             }
@@ -16,7 +16,7 @@ exports.getDashboardStats = async(req, res) => {
 
         const averageActiveSessions = await User.count({
             where: {
-                updatedAt: {
+              lastLoginAt: {
                     [Op.gte]: moment().subtract(7, 'days').startOf('day').toDate(),
                 }
             }

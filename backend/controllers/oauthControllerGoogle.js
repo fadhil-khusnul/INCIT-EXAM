@@ -84,15 +84,17 @@ exports.googleCallback = async (req, res, next) => {
     if (!user) {
 
         user = await User.create({
-            google: data.id,
+            googleId: data.id,
             email: data.email,
             name: data.name,
             profilePic: data.picture,
+            lastLoginAt: Date.now()
 
         });
     } else {
         // Increment login count
         user.loginCount += 1;
+        user.lastLoginAt = Date.now();
         await user.save();
     }
 
@@ -102,8 +104,8 @@ exports.googleCallback = async (req, res, next) => {
     };
 
     const secret = process.env.JWT_SECRET;
-    const expiresIn = 60 * 60 * 1;
-    const token = jwt.sign(payload, secret, { expiresIn: expiresIn });
+    // const expiresIn = 60 * 60 * 1;
+    const token = jwt.sign(payload, secret);
 
 
     res.cookie('accessToken', token);
@@ -112,15 +114,4 @@ exports.googleCallback = async (req, res, next) => {
     return res.redirect(`${process.env.CLIENT_URL}/dashboard`);
 
 
-
-
-    // return res.json({
-    //     data: {
-    //         id: user.id,
-    //         name: user.name,
-    //         profilePic: data.picture,
-
-    //     },
-    //     token: token
-    // });
 };
